@@ -11,8 +11,8 @@
  */
 
 //#include <sys/event.h>
-#include "ty_server.h"
-#include "kvdb.h"
+#include "cedis/ty_server.h"
+#include "cedis/kvdb.h"
 #include <stdlib.h>  // exit
 #include <string.h> //memset.h
 #include <assert.h>

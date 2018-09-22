@@ -1,51 +1,54 @@
-# build kvdb and kvdb_test
+#OPT ?= -O2 -DNDEBUG
+# (B) Debug mode, w/ full line-level debugging symbols
+OPT ?= -g2
+# (C) Profiling mode: opt, but w/debugging symbols
+# OPT ?= -O2 -g2 -DNDEBUG
+$(shell CC="$(CC)" CXX="$(CXX)" TARGET_OS="$(TARGET_OS)" ./build_config 1>&2)
+include config.mk
 
-TARGET=server
+CFLAGS += -I. $(PLATFORM_CCFLAGS) $(OPT)
+CXXFLAGS += -I. $(PLATFORM_CXXFLAGS) $(OPT)
 
-CC=gcc
-OPTIMIZE = -O0
-prod: OPTIMIZE = -O3
-PROFILE =
-prof: PROFILE = -pg # for gprof profiling
-CFLAGS = $(PROFILE) -std=c11 -g -Wall -Werror $(OPTIMIZE) 
-CFLAGS += -D_GNU_SOURCE # needed for ftruncate & MAP_FILE on linux
-#CFLAGS += -fprofile-arcs -ftest-coverage
-OBJECTS = server.o kvdb.o hash_32.o
-LDFLAGS =  $(PROFILE)  
-LDLIBS = 
+LDFLAGS += $(PLATFORM_LDFLAGS)
+LIBS += $(PLATFORM_LIBS)
 
+HANDY_SOURCES += $(shell find handy -name '*.cc')
+HANDY_OBJECTS = $(HANDY_SOURCES:.cc=.o)
 
+CEDIS_SOURCES += $(shell find cedis -name '*.cc')
+CEDIS = $(CEDIS_SOURCES:.cc=)
 
-all: $(TARGET)
+LIBRARY = libhandy.a
 
-prod: all
+TARGETS = $(LIBRARY) handy_test $(CEDIS) $(KW)
 
-prof: cleand all
-	./$(TARGET)
-	gprof ./$(TARGET) > kvdb.profile
-	cat ./kvdb.profile | less
+default: $(TARGETS)
+$(CEDIS): $(LIBRARY)
+$(KW): $(LIBRARY)
 
+install: libhandy.a
+	mkdir -p $(PREFIX)/usr/local/include/handy
+	cp -f handy/*.h $(PREFIX)/usr/local/include/handy
+	cp -f libhandy.a $(PREFIX)/usr/local/lib
 
-$(TARGET): $(OBJECTS)
-
+uninstall:
+	rm -rf $(PREFIX)/usr/local/include/handy $(PREFIX)/usr/local/lib/libhandy.a
 clean:
-	rm -f ./$(TARGET)
-	rm -f ./*.o
+			-rm -f $(TARGETS)
+			-rm -f */*.o
 
+$(LIBRARY): $(HANDY_OBJECTS)
+		rm -f $@
+			$(AR) -rs $@ $(HANDY_OBJECTS)
 
-# clean the test database created
-cleand: clean
-	rm -f ./kv001.db
-	rm -f ~/kv001.db
-	rm -f ./gmon.out
-	rm -f ./*.profile
+handy_test: $(TEST_OBJECTS) $(LIBRARY)
+	$(CXX) $^ -o $@ $(LDFLAGS) $(LIBS)
 
-memchk: all
-	valgrind --dsymutil=yes --track-origins=yes \
-                 --leak-check=full ./$(TARGET)
+.cc.o:
+		$(CXX) $(CXXFLAGS) -c $< -o $@
 
-run:
-	./$(TARGET)
+.c.o:
+		$(CC) $(CFLAGS) -c $< -o $@
 
-
-
+.cc:
+	$(CXX) -o $@ $< $(CXXFLAGS) $(LDFLAGS) $(LIBRARY) $(LIBS)
